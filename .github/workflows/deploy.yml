@@ -52,15 +52,10 @@ jobs:
 
       - name: Prepare SSH key file
         run: |
-          if [ -n "$VM_SSH_KEY_B64" ]; then
-            echo "$VM_SSH_KEY_B64" | base64 --decode > deploy_key.pem
-          else
-            printf '%s\n' "$VM_SSH_KEY" > deploy_key.pem
-          fi
+          printf '%s\n' "$VM_SSH_KEY" > deploy_key.pem
           chmod 600 deploy_key.pem
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
 
       - name: Deploy to VM using ssh
         run: |
