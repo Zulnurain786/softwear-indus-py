@@ -6,69 +6,53 @@ on:
       - main
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Checkout code
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-
-      - name: Debug secrets length
-        run: |
-          echo "username length: ${#DOCKER_USERNAME}"
-          echo "password length: ${#DOCKER_PASSWORD}"
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-
-      # 2. Login to Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 3. Build, tag with commit SHA, and push
-      - name: Build and push image
-        uses: docker/build-push-action@v5
-        
+      - name: Build and tag image
+        run: |
+          docker build -t obaidlona/myapp:latest -t obaidlona/myapp:${{ github.sha }} .
+
+      - name: Push image
+        run: |
+          docker push obaidlona/myapp:latest
+          docker push obaidlona/myapp:${{ github.sha }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.yml to VM
+        uses: appleboy/scp-action@v0.1.7
         with:
-          context: .
-          push: true
-          tags: |
-            ${{ secrets.DOCKER_USERNAME }}/my-app:latest
-            ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          source: "FlaskWebProject1/docker-compose.yml"
+          target: "~/app"
+          strip_components: 1
 
-      # 4. Prepare SSH key and deploy to VM using runner ssh
-      - name: Debug SSH secrets length
-        run: |
-          echo "VM_SSH_KEY length: ${#VM_SSH_KEY}"
-          echo "VM_SSH_KEY_B64 length: ${#VM_SSH_KEY_B64}"
-        env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
-
-      - name: Prepare SSH key file
-        run: |
-          mkdir -p ~/.ssh
-          if [ -n "$VM_SSH_KEY_B64" ]; then
-            printf '%s' "$VM_SSH_KEY_B64" | tr -d '\r' | base64 --decode > ~/.ssh/deploy_key
-          else
-            printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
-          fi
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keygen -lf ~/.ssh/deploy_key || true
-        env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
-
-      - name: Deploy to VM using ssh
-        run: |
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
-          ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
-            'docker compose pull && docker compose up -d'
-        env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
+      - name: Deploy to VM via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          script: |
+            echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+            cd ~/app
+            export APP1_IMAGE_TAG=${{ github.sha }}
+            sudo -E docker compose pull
+            sudo -E docker compose up -d
