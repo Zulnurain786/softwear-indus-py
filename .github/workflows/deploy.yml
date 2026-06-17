@@ -50,13 +50,25 @@ jobs:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
 
-      - name: Deploy to VM using ssh
+      - name: Prepare SSH key file
         run: |
           mkdir -p ~/.ssh
-          printf '%s' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          if [ -n "$VM_SSH_KEY_B64" ]; then
+            printf '%s' "$VM_SSH_KEY_B64" | tr -d '\r' | base64 --decode > ~/.ssh/deploy_key
+          else
+            printf '%s\n' "$VM_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          fi
           chmod 600 ~/.ssh/deploy_key
+          ssh-keygen -lf ~/.ssh/deploy_key || true
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
+
+      - name: Deploy to VM using ssh
+        run: |
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
             'docker compose pull && docker compose up -d'
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
