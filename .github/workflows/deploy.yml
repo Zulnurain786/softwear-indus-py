@@ -45,6 +45,21 @@ jobs:
         env:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
 
+      - name: Debug SSH key
+        run: |
+          echo "=== Key first line ==="
+          head -1 ~/.ssh/deploy_key
+          echo "=== Key last line ==="
+          tail -1 ~/.ssh/deploy_key
+          echo "=== Line count ==="
+          wc -l ~/.ssh/deploy_key
+          echo "=== File permissions ==="
+          ls -la ~/.ssh/deploy_key
+          echo "=== Key type & fingerprint ==="
+          ssh-keygen -l -f ~/.ssh/deploy_key
+          echo "=== Any Windows line endings (should be empty) ==="
+          cat -A ~/.ssh/deploy_key | grep '\^M' || echo "No Windows line endings found"
+
       - name: Create remote app directory
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
