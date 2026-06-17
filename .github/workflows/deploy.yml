@@ -52,6 +52,7 @@ jobs:
           script: |
             echo "${{ secrets.DOCKER_PASSWORD }}" | sudo docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
             cd ~/app
+            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
             export APP1_IMAGE_TAG=${{ github.sha }}
             sudo -E docker compose pull
             sudo -E docker compose up -d
