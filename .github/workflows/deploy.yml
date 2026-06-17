@@ -50,13 +50,13 @@ jobs:
           VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
           VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
 
-      - name: Deploy to VM using ssh-agent
+      - name: Deploy to VM using ssh
         run: |
           mkdir -p ~/.ssh
-          echo "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          echo "$VM_SSH_KEY_B64" | base64 --decode > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
           ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/deploy_key ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
             'docker compose pull && docker compose up -d'
         env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
