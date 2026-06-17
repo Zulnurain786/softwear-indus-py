@@ -40,9 +40,8 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_SSH_KEY }}
-          source: "FlaskWebProject1/docker-compose.yml"
+          source: "docker-compose.yml"
           target: "~/app"
-          strip_components: 1
 
       - name: Deploy to VM via SSH
         uses: appleboy/ssh-action@v1.0.3
