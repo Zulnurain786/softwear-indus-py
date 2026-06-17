@@ -41,13 +41,28 @@ jobs:
             ${{ secrets.DOCKER_USERNAME }}/my-app:latest
             ${{ secrets.DOCKER_USERNAME }}/my-app:${{ github.sha }}
 
-      # 4. SSH into VM and deploy
-      - name: Deploy to VM
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.VM_SSH_KEY }}
-          script: |
-            docker compose pull
-            docker compose up -d
+      # 4. Prepare SSH key and deploy to VM using runner ssh
+      - name: Debug SSH secrets length
+        run: |
+          echo "VM_SSH_KEY length: ${#VM_SSH_KEY}"
+          echo "VM_SSH_KEY_B64 length: ${#VM_SSH_KEY_B64}"
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
+
+      - name: Prepare SSH key file
+        run: |
+          if [ -n "$VM_SSH_KEY_B64" ]; then
+            echo "$VM_SSH_KEY_B64" | base64 --decode > deploy_key.pem
+          else
+            printf '%s\n' "$VM_SSH_KEY" > deploy_key.pem
+          fi
+          chmod 600 deploy_key.pem
+        env:
+          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
+          VM_SSH_KEY_B64: ${{ secrets.VM_SSH_KEY_B64 }}
+
+      - name: Deploy to VM using ssh
+        run: |
+          ssh -o StrictHostKeyChecking=no -i deploy_key.pem ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
+            'docker compose pull && docker compose up -d'
