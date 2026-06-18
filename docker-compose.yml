@@ -1,12 +1,26 @@
 version: '3.8'
 services:
-  flask-app:
+  flask-app-1:
     image: "${DOCKER_USERNAME}/myapp:${APP1_IMAGE_TAG:-latest}"
-    container_name: flask-app
+    container_name: flask-app-1
     ports:
       - "8001:80"
     environment:
-      - INSTANCE_NAME=flask-app
+      - INSTANCE_NAME=flask-app-1
+      - VERSION=1.0
+    networks:
+      - mynetwork
+    depends_on:
+      - db
+
+  flask-app-2:
+    image: "${DOCKER_USERNAME}/myapp:${APP2_IMAGE_TAG:-latest}"
+    container_name: flask-app-2
+    ports:
+      - "8002:80"
+    environment:
+      - INSTANCE_NAME=flask-app-2
+      - VERSION=1.0
     networks:
       - mynetwork
     depends_on:
