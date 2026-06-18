@@ -8,8 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Login to Docker Hub
@@ -18,7 +19,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and tag image
+      - name: Build image
         run: |
           docker build \
             -t ${{ secrets.DOCKER_USERNAME }}/myapp:latest \
@@ -32,38 +33,19 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Prepare SSH key
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$VM_SSH_KEY" > ~/.ssh/deploy_key
+          cat > ~/.ssh/deploy_key <<EOF
+          ${{ secrets.VM_SSH_KEY }}
+          EOF
+          sed -i 's/\r$//' ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          chmod 700 ~/.ssh
-        env:
-          VM_SSH_KEY: ${{ secrets.VM_SSH_KEY }}
-
-      - name: Debug SSH key
-        run: |
-          echo "=== Key first line ==="
-          head -1 ~/.ssh/deploy_key
-          echo "=== Key last line ==="
-          tail -1 ~/.ssh/deploy_key
-          echo "=== Line count ==="
-          wc -l ~/.ssh/deploy_key
-          echo "=== File permissions ==="
-          ls -la ~/.ssh/deploy_key
-          echo "=== Key type & fingerprint ==="
-          ssh-keygen -l -f ~/.ssh/deploy_key
-          echo "=== Any Windows line endings (should be empty) ==="
-          cat -A ~/.ssh/deploy_key | grep '\^M' || echo "No Windows line endings found"
-
-      - name: Create remote app directory
-        run: |
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
-            ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} "mkdir -p ~/app"
 
       - name: Copy docker-compose.yml to VM
         run: |
@@ -71,23 +53,30 @@ jobs:
             docker-compose.yml \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }}:~/app/docker-compose.yml
 
-      - name: Deploy to VM via SSH
+      - name: Deploy flask-app-1
         env:
-          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
-          DOCKER_PASS: ${{ secrets.DOCKER_PASSWORD }}
           IMAGE_TAG: ${{ github.sha }}
+          DOCKER_USER: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} \
-            DOCKER_USERNAME="$DOCKER_USER" \
-            DOCKER_PASSWORD="$DOCKER_PASS" \
-            IMAGE_TAG="$IMAGE_TAG" \
-            bash -s << 'ENDSSH'
-              set -euo pipefail
-              mkdir -p ~/app
-              cd ~/app
-              echo "$DOCKER_PASSWORD" | sudo docker login -u "$DOCKER_USERNAME" --password-stdin
-              sudo -E docker compose pull
-              sudo -E docker compose up -d
-              sudo docker compose ps
-          ENDSSH
+            "export DOCKER_USER='${DOCKER_USER}' \
+             IMAGE_TAG='${IMAGE_TAG}' \
+             DOCKER_PASSWORD='${DOCKER_PASSWORD}'; bash -s" <<'EOF'
+          set -euo pipefail
+
+          mkdir -p ~/app
+          cd ~/app
+
+          export DOCKER_USERNAME="$DOCKER_USER"
+          export APP1_IMAGE_TAG="$IMAGE_TAG"
+
+          echo "$DOCKER_PASSWORD" | sudo docker login \
+            -u "$DOCKER_USER" --password-stdin
+
+          sudo -E docker compose pull flask-app-1
+          sudo -E docker compose up -d flask-app-1
+
+          sudo docker compose ps
+          EOF
